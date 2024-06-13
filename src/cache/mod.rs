@@ -352,13 +352,22 @@ impl Cache {
         let (json, [url, refer]) = self.pre_run_code(run.clone(), rfid, test_case).await?;
         trace!("Pre-run code result {:#?}, {}, {}", json, url, refer);
 
-        let text = self
+        let response = self
             .0
             .clone()
             .run_code(json.clone(), url.clone(), refer.clone())
-            .await?
-            .text()
             .await?;
+        let response_status = response.status();
+
+        let mut text = response.text().await?;
+        if !response_status.is_success() {
+            println!("Response is not success! Error Code {:?}", response_status);
+            println!("If error code is 403, it's likely caught by Cloudflare, trying to bypass it");
+            let output = self
+                .0
+                .clone().execute_curl_impersonate(json.clone(), url.clone(), refer.clone())?;
+            text = String::from_utf8_lossy(&output.stdout).to_string();
+        }
 
         let run_res: RunCode = serde_json::from_str(&text).map_err(|e| {
             anyhow!("JSON error: {e}, please double check your session and csrf config.")

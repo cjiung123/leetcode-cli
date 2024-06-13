@@ -8,6 +8,7 @@ use reqwest::{
     Client, ClientBuilder, Response,
 };
 use std::{collections::HashMap, str::FromStr, time::Duration};
+use std::process::{Command, Output};
 
 /// LeetCode API set
 #[derive(Clone)]
@@ -43,7 +44,6 @@ impl LeetCode {
             vec![
                 ("Cookie", &cookie),
                 ("x-csrftoken", &csrf),
-                ("x-requested-with", "XMLHttpRequest"),
                 ("Origin", &conf.sys.urls.base),
             ],
         )?;
@@ -231,6 +231,40 @@ impl LeetCode {
         }
         .send(&self.client)
         .await
+    }
+    
+    pub fn execute_curl_impersonate(self, j: Json, url: String, refer: String) -> Result<Output> {
+        let header_csrf_arg = match self.default_headers.get("x-csrftoken") {
+            Some(value) => format!("x-csrftoken: {}", value.to_str().unwrap()),
+            None => String::new()
+        };
+
+        let header_referer_arg = format!("Referer: {}", refer);
+
+        let cookie_arg = match self.default_headers.get("Cookie") {
+            Some(value) => format!("{}", value.to_str().unwrap()),
+            None => String::new()
+        };     
+
+        let data_arg = match serde_json::to_string(&j) {
+            Ok(value) => format!("{}", value),
+            Err(_) => String::new()
+        };
+
+        let output = Command::new("curl_ff117")
+            .arg("--header")
+            .arg(&header_csrf_arg)
+            .arg("--header")
+            .arg(&header_referer_arg)
+            .arg("--cookie")
+            .arg(&cookie_arg)
+            .arg("--data")
+            .arg(&data_arg)
+            .arg(&url)
+            .output()
+            .expect("Failed to execute process");
+        trace!("{:?}", output);
+        Ok(output)
     }
 
     /// Get the result of submission / testing
